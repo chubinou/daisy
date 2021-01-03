@@ -1,6 +1,7 @@
 #include "daisysp.h"
 #include "daisy_patch.h"
 #include <string>
+#include <algorithm>
 
 using namespace daisy;
 using namespace daisysp;
@@ -13,6 +14,10 @@ public:
     virtual void init() = 0;
     virtual void AudioCallback(float**, float**, size_t) = 0;
     virtual void process() = 0;
+    virtual const char* name() const = 0;
+
+    virtual void setup() {}
+    virtual void tearDown() {}
 
     void printSimpleParam(short line, const char* name, const char* value) {
 
@@ -38,6 +43,8 @@ public:
         MODE_RANDOM,
         MODE_MAX
     };
+
+    const char* name() const override { return "ARP"; }
 
     void init() override{
         InitChords();
@@ -101,24 +108,27 @@ private:
     void UpdateControls()
     {
         pitch = pitchParam.Process();
-        steps_count = stepsParam.Process();
+        stepsCount = stepsParam.Process();
         chord = chordParam.Process();
         mode = modeParam.Process();
 
+        if (patch.gate_input[1].Trig()) {
+            step = 0;
+        }
         if (patch.gate_input[0].Trig()) {
             switch (mode)
             {
             case MODE_UP:
                 step++;
-                step %= steps_count;
+                step %= stepsCount;
                 break;
             case MODE_DOWN:
                 if (step <= 0)
-                    step = steps_count;
+                    step = stepsCount;
                 step--;
                 break;
             case MODE_UPDOWN:
-                if (step >= (steps_count - 1))
+                if (step >= (stepsCount - 1))
                     upDown_UpPhase = false;
                 if (step <= 0)
                     upDown_UpPhase = true;
@@ -129,11 +139,11 @@ private:
                 break;
             case MODE_RANDOM:
             default:
-                step = rand() % steps_count;
+                step = rand() % stepsCount;
                 break;
 
             }
-            step %= steps_count;
+            step %= stepsCount;
         }
 
         if (patch.gate_input[1].Trig()) {
@@ -148,7 +158,7 @@ private:
         patch.display.SetCursor(0,0);
         patch.display.WriteString("ARP", Font_7x10, true);
 
-        std::string stepRepr = std::to_string(step) + " / " + std::to_string(steps_count);
+        std::string stepRepr = std::to_string(step) + " / " + std::to_string(stepsCount);
         printSimpleParam(1, "step", stepRepr.c_str());
 
         const char* chordName = "";
@@ -165,7 +175,7 @@ private:
             case 9: chordName = "half dim7";break;
             default: chordName = "unkn";break;
         }
-        printSimpleParam(2, "chord", chordName);
+        printSimpleParam(2, "mode", chordName);
 
 
         printSimpleParam(3, "chord", chordList[chord][step % 3] + (12 * (step / 3)));
@@ -186,7 +196,7 @@ private:
     float pitch = 0.0;
 
     Parameter stepsParam;
-    uint8_t steps_count;
+    uint8_t stepsCount;
 
     Parameter chordParam;
     uint8_t chord = 0;
@@ -201,25 +211,192 @@ private:
 
 };
 
+class Euclidian : public Plugin
+{
+public:
+    const char* name() const override { return "Euclidian"; }
+
+    void init() override
+    {
+        stepsParam.Init(patch.controls[DaisyPatch::CTRL_1], 0, 32, Parameter::LINEAR);
+        fillParam.Init(patch.controls[DaisyPatch::CTRL_2], 0, 1, Parameter::LINEAR);
+        rotParam.Init(patch.controls[DaisyPatch::CTRL_3], 0, 1, Parameter::LINEAR);
+        strPattern[16] = '\0';
+    }
+
+    void AudioCallback(float**, float**, size_t)  override
+    {}
+
+    void refill_pattern()
+    {
+        uint16_t pulses = stepsCount * fill;
+        uint16_t rotation = stepsCount * rot;
+        uint16_t bucket = 0; //out variable to add pulses together for each step
+
+        //fill array with rhythm
+        for( int i=rotation ; i < stepsCount + rotation; i++){
+            bucket += pulses;
+            if(bucket >= stepsCount) {
+                bucket -= stepsCount;
+                pattern[i % stepsCount] = true;
+            } else {
+                pattern[i % stepsCount] = false;
+            }
+        }
+
+        int i = 0;
+        for( ; i < stepsCount; i++)
+        {
+            strPattern[i] = pattern[i] ? 'X' : '.';
+        }
+        for( ; i < 16; i++)
+        {
+            strPattern[i] = ' ';
+        }
+    }
+
+    void processOled() {
+        patch.display.Fill(false);
+        patch.display.SetCursor(0,0);
+        patch.display.WriteString("EUCLIDIAN", Font_7x10, true);
+        printSimpleParam(1, "steps", stepsCount);
+        printSimpleParam(2, "fill", (int)(stepsCount * fill));
+        printSimpleParam(3, "rot", (int)(stepsCount * rot));
+        patch.display.SetCursor(0, 40);
+        patch.display.WriteString(strPattern, Font_7x10, true);
+        patch.display.SetCursor(7*step, 50);
+        patch.display.WriteString("|", Font_7x10, true);
+
+        patch.display.Update();
+    }
+
+    void processInput()
+    {
+        float new_steps_count = stepsParam.Process();
+        float new_fill = fillParam.Process();
+        float new_rot = rotParam.Process();
+
+        if (new_steps_count != stepsCount
+                || -(int)(new_fill * 100) != (int)(fill * 100)
+                || -(int)(new_rot * 100 != (int)(rot * 100)))
+        {
+            stepsCount = new_steps_count;
+            fill =  new_fill;
+            rot =  new_rot;
+            refill_pattern();
+        }
+    }
+
+    void processOutput()
+    {
+        if (patch.gate_input[1].Trig()) {
+            step = 0;
+        }
+        if (patch.gate_input[0].Trig()) {
+            if (pattern[step]) {
+                dsy_gpio_write(&patch.gate_output, 1);
+                patch.DelayMs(10);
+                dsy_gpio_write(&patch.gate_output, 0);
+            }
+            step++;
+            step %= stepsCount;
+        }
+    }
+
+    void process() override {
+        processInput();
+        processOled();
+        processOutput();
+    }
+
+private:
+    Parameter stepsParam;
+    uint16_t stepsCount = -1;
+
+    Parameter fillParam;
+    float fill = -1;
+
+    Parameter rotParam;
+    float rot = -1;
+
+    bool pattern[32];
+    char strPattern[17];
+    uint16_t step;
+};
+
+
 Arp arp;
+Euclidian eucl;
+Plugin* currentPlugin = nullptr;
+Plugin* pluginList[] = {
+    &arp,
+    &eucl
+};
+
+#define ARRAY_SIZE(array) sizeof(array) / sizeof(*array)
+
+class MetaPlugin : public Plugin
+{
+public:
+    const char* name() const override { return "Euclidian"; }
+
+
+    void init() override{
+        for (unsigned i = 0; i < ARRAY_SIZE(pluginList); i++)
+            pluginList[i]->init();
+    }
+
+    void AudioCallback(float**, float**, size_t)  override {
+    }
+
+    void process()  override {
+        int inc = patch.encoder.Increment();
+        if ( patch.encoder.RisingEdge() ) {
+            currentPlugin = pluginList[idx];
+        } else if (inc > 0) {
+            if (idx < ARRAY_SIZE(pluginList) - 1)
+                idx++;
+        } else if (inc < 0) {
+            if (idx > 0)
+                idx--;
+        }
+        patch.display.Fill(false);
+        for (unsigned i = 0; i < std::min((unsigned)5, ARRAY_SIZE(pluginList)); i++) {
+            patch.display.SetCursor(7, i * 10);
+            patch.display.WriteString((char*)pluginList[i]->name(), Font_7x10, true);
+        }
+        patch.display.SetCursor(0, idx * 10);
+        patch.display.WriteChar('>', Font_7x10, true);
+        patch.display.Update();
+    }
+
+    u_int16_t idx = 0;
+};
+
+MetaPlugin meta;
 
 
 void AudioCallback(float** input, float** output, size_t size)
 {
-    arp.AudioCallback(input, output, size);
+    currentPlugin->AudioCallback(input, output, size);
 }
 
 int main(void)
 {
+
     patch.Init(); // Initialize hardware (daisy seed, and patch)
 
-    arp.init();
+    meta.init();
+    currentPlugin = &meta;
 
     patch.StartAdc();
     patch.StartAudio(AudioCallback);
     while(1)  {
         patch.DebounceControls();
-        arp.process();
+        if (patch.encoder.TimeHeldMs() > 1000) {
+            currentPlugin = &meta;
+        }
+        currentPlugin->process();
     }
 }
 
