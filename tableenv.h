@@ -1,0 +1,92 @@
+#ifndef TABLEENV_H
+#define TABLEENV_H
+
+#include "plugin.hpp"
+#include "Menu.hpp"
+
+#define TABLE_ENV_TABLE_SIZE 1024
+
+
+struct FileHeader {
+    char magic[4];
+    int32_t count;
+} __attribute__((packed));
+
+struct Envelope {
+    char name[8];
+    float samples[TABLE_ENV_TABLE_SIZE];
+} __attribute__((packed));
+
+static_assert ( sizeof (FileHeader) == 8,"bad Header size");
+static_assert ( sizeof (Envelope) == 8 + 1024*sizeof (float),"bad enveloppe size");
+
+class TableEnv;
+class ShowTable;
+
+struct EnvelopeState {
+    void init(TableEnv* parent, int ctrlDuration, int ctrlShape,
+              SetMenuEntry *tableVar, BoolMenuEntry *loopVar,
+              ShowParamEntry *timeEntry,
+              RangeParamEntry* tscale, RangeParamEntry* vscale,
+              SetMenuEntry* p2Dest, ShowTable* showTableEntry);
+
+    void processTrigger(GateIn* );
+    void update();
+
+    void reset();
+
+    Parameter m_durationParam;
+    float m_duration = 0.f;
+    Parameter m_p2Param;
+
+    RangeParamEntry* m_vscale = nullptr;
+    float m_valShape = 1.f;
+
+    RangeParamEntry* m_tscale = nullptr;
+    float m_timeShape = 1.f;
+
+    Envelope* m_env = nullptr;
+    float m_phase = 0.f;
+    float m_delta = 0.f;
+    float m_val = 0;
+    bool m_running = false;
+
+    SetMenuEntry* m_tableVar = nullptr;
+    BoolMenuEntry* m_loopVar = nullptr;
+    SetMenuEntry* m_p2Dest;
+
+    TableEnv* m_parent = nullptr;
+};
+
+
+class TableEnv : public Plugin
+{
+public:
+    const char* name() const override { return "Table Env"; }
+
+    void init() override;
+    bool load() override;
+    void unload() override;
+
+    void AudioCallback(float**, float**, size_t)  override;
+
+    void processOled();
+    void processInput();
+    void processOutput();
+
+    void process() override;
+
+public:
+    bool loadBank(const char* bankName);
+
+    EnvelopeState m_envA;
+    EnvelopeState m_envB;
+
+    size_t m_tableCount = 0;
+    Envelope* m_tables = nullptr;
+    const char** m_labels = nullptr;
+
+    friend struct EnvelopeState;
+};
+
+#endif // TABLEENV_H

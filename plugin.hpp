@@ -14,10 +14,24 @@ using namespace daisysp;
 
 extern DaisyPatch patch;
 
+void fail(const std::string& msg);
+void warn(const std::string& msg);
+
+
+//defined in main
+void pauseAudio();
+void resumeAudio();
+
 class Plugin
 {
 public:
+    //startup init
     virtual void init() = 0;
+
+    //return true if the plugin can be loaded
+    virtual bool load() { return true; }
+    virtual void unload() { }
+
     virtual void AudioCallback(float**, float**, size_t) = 0;
     virtual void process() = 0;
     virtual const char* name() const = 0;

@@ -3,6 +3,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 #include "daisysp.h"
 #include "daisy_patch.h"
+#include "sys/fatfs.h"
 #include <string>
 #include <algorithm>
 
@@ -10,16 +11,20 @@
 #include "arp.hpp"
 #include "xfade.hpp"
 #include "rand.hpp"
+#include "tableenv.h"
 
 DaisyPatch patch;
+SdmmcHandler sdcard;
 
 Arp arp;
 Euclidian eucl;
 Rand randplug;
 XFade xfade;
+TableEnv tableEnv;
 
 Plugin* currentPlugin = nullptr;
 Plugin* pluginList[] = {
+    &tableEnv,
     &arp,
     &eucl,
     &randplug,
@@ -29,8 +34,9 @@ Plugin* pluginList[] = {
 class MetaPlugin : public Plugin
 {
 public:
-    const char* name() const override { return "META"; }
-
+    const char* name() const override {
+        return "META";
+    }
 
     void init() override{
         for (unsigned i = 0; i < ARRAY_SIZE(pluginList); i++)
@@ -43,7 +49,10 @@ public:
     void process()  override {
         int inc = patch.encoder.Increment();
         if ( patch.encoder.RisingEdge() ) {
-            std::exchange(currentPlugin, pluginList[idx]);
+            if (pluginList[idx]->load()) {
+                currentPlugin->unload();
+                std::exchange(currentPlugin, pluginList[idx]);
+            }
         } else if (inc > 0) {
             if (idx < ARRAY_SIZE(pluginList) - 1)
                 idx++;
@@ -61,6 +70,7 @@ public:
         patch.display.Update();
     }
 
+private:
     u_int16_t idx = 0;
 };
 
@@ -71,10 +81,21 @@ void AudioCallback(float** input, float** output, size_t size)
     currentPlugin->AudioCallback(input, output, size);
 }
 
+void pauseAudio() {
+    patch.StopAudio();
+}
+
+void resumeAudio() {
+    patch.StartAudio(AudioCallback);
+}
+
 int main(void)
 {
 
     patch.Init(); // Initialize hardware (daisy seed, and patch)
+    sdcard.Init();
+    dsy_fatfs_init();
+    f_mount(&SDFatFS, SDPath, 1);
 
     meta.init();
     currentPlugin = &meta;
@@ -82,7 +103,7 @@ int main(void)
     patch.StartAdc();
     patch.StartAudio(AudioCallback);
     while(1)  {
-        patch.DebounceControls();
+        patch.ProcessAllControls();
         if (patch.encoder.TimeHeldMs() > 1000) {
             currentPlugin = &meta;
         }
