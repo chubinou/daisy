@@ -5,7 +5,9 @@ TARGET = arp
 CPP_SOURCES = \
     main.cpp \
     arp.cpp \
-    euclid.cpp
+    euclid.cpp \
+    xfade.cpp \
+    rand.cpp
 
 # Library Locations
 LIBDAISY_DIR = ../../libdaisy

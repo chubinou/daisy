@@ -8,21 +8,28 @@
 
 #include "euclid.hpp"
 #include "arp.hpp"
+#include "xfade.hpp"
+#include "rand.hpp"
 
 DaisyPatch patch;
 
 Arp arp;
 Euclidian eucl;
+Rand randplug;
+XFade xfade;
+
 Plugin* currentPlugin = nullptr;
 Plugin* pluginList[] = {
     &arp,
-    &eucl
+    &eucl,
+    &randplug,
+    &xfade
 };
 
 class MetaPlugin : public Plugin
 {
 public:
-    const char* name() const override { return "Euclidian"; }
+    const char* name() const override { return "META"; }
 
 
     void init() override{
@@ -36,7 +43,7 @@ public:
     void process()  override {
         int inc = patch.encoder.Increment();
         if ( patch.encoder.RisingEdge() ) {
-            currentPlugin = pluginList[idx];
+            std::exchange(currentPlugin, pluginList[idx]);
         } else if (inc > 0) {
             if (idx < ARRAY_SIZE(pluginList) - 1)
                 idx++;
