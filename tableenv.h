@@ -9,16 +9,18 @@
 
 struct FileHeader {
     char magic[4];
-    int32_t count;
+    uint8_t version;
+    uint8_t reserved;
+    int16_t count;
 } __attribute__((packed));
 
 struct Envelope {
-    char name[8];
+    char name[12];
     float samples[TABLE_ENV_TABLE_SIZE];
 } __attribute__((packed));
 
 static_assert ( sizeof (FileHeader) == 8,"bad Header size");
-static_assert ( sizeof (Envelope) == 8 + 1024*sizeof (float),"bad enveloppe size");
+static_assert ( sizeof (Envelope) == 12 + 1024*sizeof (float),"bad enveloppe size");
 
 class TableEnv;
 class ShowTable;

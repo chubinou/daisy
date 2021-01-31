@@ -400,14 +400,20 @@ bool TableEnv::loadBank(const char* bankName) {
         warn("read header failed");
         return false;
     }
+
+    if (strncmp(header.magic, "Envt", 4) != 0) {
+        warn("bad file format");
+        return false;
+    }
+    if (header.version != 1) {
+        warn("bad file version");
+        return false;
+    }
+
     //header.count = __ntohl(header.count);
     m_tableCount = header.count;
 
     UINT readSize = m_tableCount * sizeof (Envelope);
-    if (m_tableCount != 3) {
-        std::string count = "unexp count" + std::to_string(m_tableCount);
-        fail(count);
-    }
 
     m_tables = (Envelope*)malloc(readSize);
     if (!m_tables) {
