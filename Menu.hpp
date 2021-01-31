@@ -72,6 +72,18 @@ public:
 
 };
 
+class LabelEntry : public MenuEntry {
+public:
+    LabelEntry(const char* name);
+
+    void print(int line, bool on) override;
+    void onClick() override;
+
+private:
+    const char* m_name;
+};
+
+
 class BackMenuEntry : public MenuEntry {
 public:
     void print(int line, bool on) override;

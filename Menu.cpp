@@ -106,6 +106,23 @@ void KVEditMenuEntry::onClick()
     m_parentMenu->enterSubMenu(this);
 }
 
+//////////////////////////////////// LabelMenuEntry
+
+LabelEntry::LabelEntry(const char* name)
+    : m_name(name)
+{
+}
+
+void LabelEntry::print(int line, bool on)
+{
+    patch.display.SetCursor(0, line * 10);
+    patch.display.WriteString((char*)m_name, Font_7x10, on);
+}
+
+void LabelEntry::onClick()
+{
+    //N/A
+}
 
 //////////////////////////////////// BackMenuEntry
 
