@@ -2,12 +2,6 @@
 #include "fatfs.h"
 #include <machine/endian.h>
 
-static const char* paramDest[] = {
-    "Time",
-    "Val",
-};
-
-
 static const char* playModeLabel[] = {
     "FWD",
     "LOOP",
@@ -167,24 +161,32 @@ private:
 };
 
 
-static SetMenuEntry     tableA("A Table:");
-static ShowParamEntry    timeA("A Duration:");
-static SetMenuEntry      loopA("A Mode:", playModeLabel, PM_MAX);
-static RangeParamEntry tscaleA("A TScale:", 0.01f, 10.f, 64, 128, RangeParamEntry::EXPONENTIAL);
-static RangeParamEntry vscaleA("A VScale:", 0.01f, 10.f, 64, 128, RangeParamEntry::EXPONENTIAL);
+static SetMenuEntry     tableA("A Table");
+static RangeParamEntry   timeA("A Duration", 0.1f, 30.f, 128, 256, Parameter::EXPONENTIAL);
+static SetMenuEntry      loopA("A Mode", playModeLabel, PM_MAX);
+static RangeParamEntry tscaleA("A TScale", 0.01f, 10.f, 64, 128, Parameter::EXPONENTIAL);
+static RangeParamEntry vscaleA("A VScale", 0.01f, 10.f, 64, 128, Parameter::EXPONENTIAL);
+static RangeParamEntry  levelA("A Level",   0.1f,  5.f, 39, 39,  Parameter::LINEAR);
 static ShowTable         showA("A view...");
 
-static SetMenuEntry     tableB("B Table:");
-static ShowParamEntry    timeB("B Duration:");
-static SetMenuEntry      loopB("B Mode:", playModeLabel, PM_MAX);
-static RangeParamEntry tscaleB("B TScale:", 0.01f, 10.f, 64, 128, RangeParamEntry::EXPONENTIAL);
-static RangeParamEntry vscaleB("B VScale:", 0.01f, 10.f, 64, 128, RangeParamEntry::EXPONENTIAL);
+static SetMenuEntry     tableB("B Table");
+static RangeParamEntry   timeB("B Duration", 0.1f, 30.f, 128, 256, Parameter::EXPONENTIAL);
+static SetMenuEntry      loopB("B Mode", playModeLabel, PM_MAX);
+static RangeParamEntry tscaleB("B TScale", 0.01f, 10.f, 64, 128, Parameter::EXPONENTIAL);
+static RangeParamEntry vscaleB("B VScale", 0.01f, 10.f, 64, 128, Parameter::EXPONENTIAL);
+static RangeParamEntry  levelB("B Level",   0.1f,  5.f, 39, 39,  Parameter::LINEAR);
 static ShowTable         showB("B view...");
 
-static SetMenuEntry        p1Dest("P1 Dest:");
-static SetMenuEntry        p2Dest("P2 Dest:");
-static SetMenuEntry        p3Dest("P3 Dest:");
-static SetMenuEntry        p4Dest("P4 Dest:");
+static RangeParamEntry* bindableEntries[] = {
+    &timeA,
+    &tscaleA,
+    &vscaleA,
+    &timeB,
+    &tscaleB,
+    &vscaleB,
+};
+
+static BindAllParamEntry paramBind(bindableEntries, ARRAY_SIZE(bindableEntries));
 
 static MenuEntry* mainMenuEntries[] = {
     &tableA,
@@ -201,8 +203,10 @@ static MenuEntry* mainMenuEntries[] = {
     &loopB,
     &showB,
 
-    &p2Dest,
-    &p4Dest,
+    &paramBind.p1,
+    &paramBind.p2,
+    &paramBind.p3,
+    &paramBind.p4,
 };
 static SimpleMenu mainMenu(mainMenuEntries, ARRAY_SIZE(mainMenuEntries));
 
@@ -210,8 +214,8 @@ static SimpleMenu mainMenu(mainMenuEntries, ARRAY_SIZE(mainMenuEntries));
 void TableEnv::init()
 {
     unload();
-    m_envA.init(this, DaisyPatch::CTRL_1, DaisyPatch::CTRL_2, &tableA, &loopA, &timeA, &tscaleA, &vscaleA, &p2Dest, &showA);
-    m_envB.init(this, DaisyPatch::CTRL_3, DaisyPatch::CTRL_4, &tableB, &loopB, &timeB, &tscaleB, &vscaleB, &p4Dest, &showB);
+    m_envA.init(this, &tableA, &loopA, &timeA, &tscaleA, &vscaleA, &showA);
+    m_envB.init(this, &tableB, &loopB, &timeB, &tscaleB, &vscaleB, &showB);
 }
 
 bool TableEnv::load()
@@ -250,17 +254,19 @@ void TableEnv::AudioCallback(float ** input, float ** output, size_t size)
 
 void EnvelopeState::update()
 {
-    m_durationParam.Process();
-    m_duration = m_durationParam.Process() * 0.05 + m_duration * 0.95;
+    m_durationParam->processParam();
+    m_duration = m_durationParam->value();
 
-    //m_p2Param.Process();
-    //if (m_p2Dest->value() == 0)
-    //    m_timeShape = m_p2Param.Process() * 0.05 + m_timeShape * 0.95;
-    //else if (m_p2Dest->value() == 1)
-    //    m_valShape= m_p2Param.Process() * 0.05 + m_valShape * 0.95;
+    m_tscale->processParam();
     m_timeShape = m_tscale->value();
+
+    m_vscale->processParam();
     m_valShape  = m_vscale->value();
+
     m_playMode  = (PlayMode)m_loopVar->value();
+    if (m_playMode == PM_LOOP || m_playMode == PM_REVLOOP || m_playMode == PM_PONG) {
+        m_running = true;
+    }
 
     if (m_tableVar->value() != -1) {
         m_env = &m_parent->m_tables[m_tableVar->value()];
@@ -317,13 +323,11 @@ void EnvelopeState::update()
 
 
 void EnvelopeState::init(TableEnv *parent,
-                         int ctrlDuration,
-                         int ctrlShape,
                          SetMenuEntry *tableVar,
                          SetMenuEntry *loopVar,
-                         ShowParamEntry* timeEntry,
-                         RangeParamEntry *tscale, RangeParamEntry *vscale,
-                         SetMenuEntry* p2Dest,
+                         RangeParamEntry* timeEntry,
+                         RangeParamEntry *tscale,
+                         RangeParamEntry *vscale,
                          ShowTable* showTableEntry)
 {
     m_parent = parent;
@@ -331,13 +335,8 @@ void EnvelopeState::init(TableEnv *parent,
     m_loopVar = loopVar;
     m_tscale = tscale;
     m_vscale = vscale;
+    m_durationParam = timeEntry;
 
-    m_p2Dest = p2Dest;
-
-    m_durationParam.Init(patch.controls[ctrlDuration], 0.1f, 30.f, m_durationParam.EXPONENTIAL);
-    m_p2Param.Init(patch.controls[ctrlShape], 0.01f, 10.f, m_durationParam.EXPONENTIAL);
-    timeEntry->setParam(&m_durationParam);
-    p2Dest->setSet(paramDest , ARRAY_SIZE(paramDest));
     showTableEntry->setEnvState(this);
 }
 

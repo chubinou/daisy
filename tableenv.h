@@ -34,20 +34,19 @@ enum  PlayMode: int {
 
 
 struct EnvelopeState {
-    void init(TableEnv* parent, int ctrlDuration, int ctrlShape,
+    void init(TableEnv* parent,
               SetMenuEntry* tableVar, SetMenuEntry* loopVar,
-              ShowParamEntry *timeEntry,
+              RangeParamEntry* timeEntry,
               RangeParamEntry* tscale, RangeParamEntry* vscale,
-              SetMenuEntry* p2Dest, ShowTable* showTableEntry);
+              ShowTable* showTableEntry);
 
     void processTrigger(GateIn* );
     void update();
 
     void reset();
 
-    Parameter m_durationParam;
+    RangeParamEntry* m_durationParam = nullptr;
     float m_duration = 0.f;
-    Parameter m_p2Param;
 
     RangeParamEntry* m_vscale = nullptr;
     float m_valShape = 1.f;
@@ -66,7 +65,6 @@ struct EnvelopeState {
     PlayMode m_playMode = PM_FORWARD;
 
     SetMenuEntry* m_tableVar = nullptr;
-    SetMenuEntry* m_p2Dest = nullptr;
 
     TableEnv* m_parent = nullptr;
 };
