@@ -23,9 +23,19 @@ static_assert ( sizeof (Envelope) == 8 + 1024*sizeof (float),"bad enveloppe size
 class TableEnv;
 class ShowTable;
 
+enum  PlayMode: int {
+    PM_FORWARD = 0,
+    PM_LOOP,
+    PM_REVERSE,
+    PM_REVLOOP,
+    PM_PONG,
+    PM_MAX
+};
+
+
 struct EnvelopeState {
     void init(TableEnv* parent, int ctrlDuration, int ctrlShape,
-              SetMenuEntry *tableVar, BoolMenuEntry *loopVar,
+              SetMenuEntry* tableVar, SetMenuEntry* loopVar,
               ShowParamEntry *timeEntry,
               RangeParamEntry* tscale, RangeParamEntry* vscale,
               SetMenuEntry* p2Dest, ShowTable* showTableEntry);
@@ -50,10 +60,13 @@ struct EnvelopeState {
     float m_delta = 0.f;
     float m_val = 0;
     bool m_running = false;
+    bool m_fwd = true;
+
+    SetMenuEntry* m_loopVar = nullptr;
+    PlayMode m_playMode = PM_FORWARD;
 
     SetMenuEntry* m_tableVar = nullptr;
-    BoolMenuEntry* m_loopVar = nullptr;
-    SetMenuEntry* m_p2Dest;
+    SetMenuEntry* m_p2Dest = nullptr;
 
     TableEnv* m_parent = nullptr;
 };

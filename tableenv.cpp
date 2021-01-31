@@ -2,6 +2,21 @@
 #include "fatfs.h"
 #include <machine/endian.h>
 
+static const char* paramDest[] = {
+    "Time",
+    "Val",
+};
+
+
+static const char* playModeLabel[] = {
+    "FWD",
+    "LOOP",
+    "REV",
+    "RLOP",
+    "PONG"
+};
+
+
 class ShowTable : public MenuEntry,  public Menu {
 public:
     enum ShowTableState : int {
@@ -35,6 +50,12 @@ public:
                     udpateSelection = false;
                 }
                 break;
+            case TS_LOOP:
+                if (m_stateEdit) {
+                    m_envstate->m_loopVar->increment(inc);
+                    udpateSelection = false;
+                }
+                break;
             case TS_VSCALE:
                 if (m_stateEdit) {
                     m_envstate->m_vscale->increment(inc);
@@ -57,11 +78,8 @@ public:
             case TS_SHAPE:
             case TS_TSCALE:
             case TS_VSCALE:
-                m_stateEdit = !m_stateEdit;
-                return true;
-            break;
             case TS_LOOP:
-                m_envstate->m_loopVar->onClick();
+                m_stateEdit = !m_stateEdit;
                 return true;
             break;
             default:
@@ -101,9 +119,9 @@ public:
         xpos += 6*7+3;
 
         patch.display.SetCursor(xpos,1);
-        patch.display.WriteString(m_envstate->m_loopVar->value() ? "L" : "S", Font_6x8, true);
-        if (m_state == TS_LOOP) drawSelection(xpos, 1);
-        xpos += 6*1+3;
+        patch.display.WriteString(m_envstate->m_loopVar->repr().c_str(), Font_6x8, true);
+        if (m_state == TS_LOOP) drawSelection(xpos, 4);
+        xpos += 6*4+3;
 
         patch.display.SetCursor(xpos,1);
         patch.display.WriteChar('T', Font_6x8, true);
@@ -151,20 +169,22 @@ private:
 
 static SetMenuEntry     tableA("A Table:");
 static ShowParamEntry    timeA("A Duration:");
-static BoolMenuEntry     loopA("A Loop:", false);
+static SetMenuEntry      loopA("A Mode:", playModeLabel, PM_MAX);
 static RangeParamEntry tscaleA("A TScale:", 0.01f, 10.f, 64, 128, RangeParamEntry::EXPONENTIAL);
 static RangeParamEntry vscaleA("A VScale:", 0.01f, 10.f, 64, 128, RangeParamEntry::EXPONENTIAL);
 static ShowTable         showA("A view...");
 
 static SetMenuEntry     tableB("B Table:");
 static ShowParamEntry    timeB("B Duration:");
-static BoolMenuEntry     loopB("B Loop:", false);
+static SetMenuEntry      loopB("B Mode:", playModeLabel, PM_MAX);
 static RangeParamEntry tscaleB("B TScale:", 0.01f, 10.f, 64, 128, RangeParamEntry::EXPONENTIAL);
 static RangeParamEntry vscaleB("B VScale:", 0.01f, 10.f, 64, 128, RangeParamEntry::EXPONENTIAL);
 static ShowTable         showB("B view...");
 
-static SetMenuEntry        p2A("A P2 DEST:");
-static SetMenuEntry        p2B("B P2 DEST:");
+static SetMenuEntry        p1Dest("P1 Dest:");
+static SetMenuEntry        p2Dest("P2 Dest:");
+static SetMenuEntry        p3Dest("P3 Dest:");
+static SetMenuEntry        p4Dest("P4 Dest:");
 
 static MenuEntry* mainMenuEntries[] = {
     &tableA,
@@ -181,21 +201,17 @@ static MenuEntry* mainMenuEntries[] = {
     &loopB,
     &showB,
 
-    &p2B,
-    &p2A,
+    &p2Dest,
+    &p4Dest,
 };
 static SimpleMenu mainMenu(mainMenuEntries, ARRAY_SIZE(mainMenuEntries));
 
-static const char* paramDest[] = {
-    "Time",
-    "Val",
-};
 
 void TableEnv::init()
 {
     unload();
-    m_envA.init(this, DaisyPatch::CTRL_1, DaisyPatch::CTRL_2, &tableA, &loopA, &timeA, &tscaleA, &vscaleA, &p2A, &showA);
-    m_envB.init(this, DaisyPatch::CTRL_3, DaisyPatch::CTRL_4, &tableB, &loopB, &timeB, &tscaleB, &vscaleB, &p2B, &showB);
+    m_envA.init(this, DaisyPatch::CTRL_1, DaisyPatch::CTRL_2, &tableA, &loopA, &timeA, &tscaleA, &vscaleA, &p2Dest, &showA);
+    m_envB.init(this, DaisyPatch::CTRL_3, DaisyPatch::CTRL_4, &tableB, &loopB, &timeB, &tscaleB, &vscaleB, &p4Dest, &showB);
 }
 
 bool TableEnv::load()
@@ -243,8 +259,8 @@ void EnvelopeState::update()
     //else if (m_p2Dest->value() == 1)
     //    m_valShape= m_p2Param.Process() * 0.05 + m_valShape * 0.95;
     m_timeShape = m_tscale->value();
-    m_valShape = m_vscale->value();
-
+    m_valShape  = m_vscale->value();
+    m_playMode  = (PlayMode)m_loopVar->value();
 
     if (m_tableVar->value() != -1) {
         m_env = &m_parent->m_tables[m_tableVar->value()];
@@ -252,20 +268,38 @@ void EnvelopeState::update()
         m_env = nullptr;
     }
 
-    if ((!m_loopVar->value() && !m_running) || !m_env)
+    if (!m_running || !m_env)
         return;
 
     m_delta = m_duration / patch.AudioCallbackRate();
 
-    m_phase += m_delta;
+    if (m_fwd)
+        m_phase += m_delta;
+    else
+        m_phase -= m_delta;
     if (m_phase > 1.f) {
-        if (!m_loopVar->value()) {
+        if (m_playMode ==  PM_FORWARD) {
             m_val = 0;
             m_phase = 0.f;
             m_running = false;
             return;
-        } else {
+        } else if (m_playMode == PM_LOOP) {
             m_phase -= 1.f;
+        } else if (m_playMode == PM_PONG) {
+            m_phase = 2.f - m_phase;
+            m_fwd = false;
+        }
+    } else if (m_phase < 0.f) {
+        if (m_playMode == PM_REVERSE) {
+            m_val = 0;
+            m_phase = 0.f;
+            m_running = false;
+            return;
+        } else if (m_playMode == PM_REVLOOP) {
+            m_phase += 1.f;
+        } else if (m_playMode == PM_PONG) {
+            m_phase *= -1;
+            m_fwd = true;
         }
     }
 
@@ -286,7 +320,7 @@ void EnvelopeState::init(TableEnv *parent,
                          int ctrlDuration,
                          int ctrlShape,
                          SetMenuEntry *tableVar,
-                         BoolMenuEntry *loopVar,
+                         SetMenuEntry *loopVar,
                          ShowParamEntry* timeEntry,
                          RangeParamEntry *tscale, RangeParamEntry *vscale,
                          SetMenuEntry* p2Dest,
@@ -319,8 +353,23 @@ void EnvelopeState::reset()
 void EnvelopeState::processTrigger(GateIn * gate)
 {
     if (gate->Trig()) {
+        switch(m_playMode) {
+        case PM_FORWARD:
+        case PM_LOOP:
+        case PM_PONG:
+            m_phase = 0.f;
+            m_fwd = true;
+            break;
+        case PM_REVERSE:
+        case PM_REVLOOP:
+            m_phase = 1.f;
+            m_fwd = false;
+            break;
+        default:
+            //unreachable
+            break;
+        }
         m_running = true;
-        m_phase = 0.f;
     }
 }
 
