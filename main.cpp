@@ -12,6 +12,7 @@
 #include "xfade.hpp"
 #include "rand.hpp"
 #include "tableenv.h"
+#include "subharmonic.hpp"
 
 DaisyPatch patch;
 SdmmcHandler sdcard;
@@ -20,11 +21,13 @@ Arp arp;
 Euclidian eucl;
 Rand randplug;
 XFade xfade;
+SubHarmonic subHarmonic;
 TableEnv tableEnv;
 
 Plugin* currentPlugin = nullptr;
 Plugin* pluginList[] = {
     &tableEnv,
+    &subHarmonic,
     &arp,
     &eucl,
     &randplug,

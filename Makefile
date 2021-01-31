@@ -18,6 +18,7 @@ CPP_SOURCES = \
     xfade.cpp \
     rand.cpp \
     tableenv.cpp \
+    subharmonic.cpp \
     Menu.cpp \
     plugin.cpp
 
