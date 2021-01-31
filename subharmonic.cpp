@@ -1,9 +1,43 @@
 #include "subharmonic.hpp"
 
+SubHarmonic::SubOsc subOscA;
+SubHarmonic::SubOsc subOscB;
+
+static LabelEntry       labelA("--- SubOsc A ---");
+static LabelEntry       labelB("--- SubOsc B ---");
+static LabelEntry       labelBind("--- Bind ---");
+
+static RangeParamEntry* bindableEntries[] = {
+    &subOscA.m_subDivParam,
+    &subOscA.m_volParam,
+    &subOscB.m_subDivParam,
+    &subOscB.m_volParam,
+};
+
+static BindAllParamEntry paramBind(bindableEntries, ARRAY_SIZE(bindableEntries));
+
+
+static MenuEntry* mainMenuEntries[] = {
+    &labelA,
+    &subOscA.m_subDivParam,
+    &subOscA.m_volParam,
+
+    &labelB,
+    &subOscB.m_subDivParam,
+    &subOscB.m_volParam,
+
+    &labelBind,
+    &paramBind.p1,
+    &paramBind.p2,
+    &paramBind.p3,
+    &paramBind.p4,
+};
+static SimpleMenu mainMenu(mainMenuEntries, ARRAY_SIZE(mainMenuEntries));
+
 void SubHarmonic::init()
 {
-    m_sub1.init(this, DaisyPatch::CTRL_1, DaisyPatch::CTRL_2);
-    m_sub2.init(this, DaisyPatch::CTRL_3, DaisyPatch::CTRL_4);
+    subOscA.init(this);
+    subOscB.init(this);
 }
 
 void SubHarmonic::AudioCallback(float** in, float** out, size_t size)
@@ -20,9 +54,10 @@ void SubHarmonic::AudioCallback(float** in, float** out, size_t size)
         }
 
 
-        out[0][i] = in[0][i]
-            + m_sub1.m_vol * (*m_sub1.m_subptr)
-            + m_sub2.m_vol * (*m_sub2.m_subptr);
+        out[0][i] = (in[0][i]
+            + subOscA.m_vol * (*subOscA.m_subptr)
+            + subOscB.m_vol * (*subOscB.m_subptr))
+            / 3.f;
     }
 }
 
@@ -32,18 +67,18 @@ void SubHarmonic::processOled()
     patch.display.SetCursor(0,0);
     patch.display.WriteString("Sub Harmonic", Font_7x10, true);
 
-    printSimpleParam(1, "sub1", m_sub1.m_subDiv);
-    printSimpleParam(2, "vol1", (int)(m_sub1.m_vol * 1000));
-    printSimpleParam(3, "sub2", m_sub2.m_subDiv);
-    printSimpleParam(4, "vol2", (int)(m_sub2.m_vol * 1000));
+    printSimpleParam(1, "sub1", subOscA.m_subDiv);
+    printSimpleParam(2, "vol1", (int)(subOscA.m_vol * 1000));
+    printSimpleParam(3, "sub2", subOscB.m_subDiv);
+    printSimpleParam(4, "vol2", (int)(subOscB.m_vol * 1000));
 
     patch.display.Update();
 }
 
 void SubHarmonic::processInput()
 {
-    m_sub1.process();
-    m_sub2.process();
+    subOscA.process();
+    subOscB.process();
 }
 
 void SubHarmonic::process()
@@ -125,18 +160,26 @@ void SubHarmonic::subClock()
 
 }
 
-void SubHarmonic::SubOsc::init(SubHarmonic* parent, int ctrlDiv, int ctrlVol)
+SubHarmonic::SubOsc::SubOsc()
+    : m_subDivParam("SubDiv", 2.f, 8.f, 6, 2, Parameter::LINEAR)
+    , m_volParam("Volume", 0.f, 1.f, 128, 64, Parameter::LINEAR)
+{
+}
+
+void SubHarmonic::SubOsc::init(SubHarmonic* parent)
 {
     m_parent = parent;
-    m_subDivParam.Init(patch.controls[ctrlDiv], 2, 8, Parameter::LINEAR);
-    m_volParam.Init(patch.controls[ctrlVol], 0, 1, Parameter::LINEAR);
     m_subptr = &m_parent->m_sub[0];
 }
 
 void SubHarmonic::SubOsc::process()
 {
-    float subSelect1 = m_subDivParam.Process();
+    m_subDivParam.processParam();
+    float subSelect1 = m_subDivParam.value();
+
     m_subDiv = roundf(subSelect1);
     m_subptr = &m_parent->m_sub[m_subDiv];
-    m_vol = m_volParam.Process();
+
+    m_volParam.processParam();
+    m_vol = m_volParam.value();
 }

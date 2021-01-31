@@ -2,7 +2,7 @@
 #define SUBHARMONIC_HPP
 
 #include "plugin.hpp"
-
+#include "Menu.hpp"
 
 class SubHarmonic : public Plugin
 {
@@ -18,28 +18,29 @@ public:
 
     void process() override;
 
+private:
+    void subClock();
+
+public:
     struct SubOsc{
-        Parameter m_subDivParam;
+        SubOsc();
+
+        RangeParamEntry m_subDivParam;
         uint8_t m_subDiv = 0;
-        Parameter m_volParam;
+
+        RangeParamEntry m_volParam;
         float m_vol = 0.f;
+
         int8_t* m_subptr = nullptr;
         SubHarmonic* m_parent = nullptr;
 
-        void init(SubHarmonic* parent, int ctrlDiv, int ctrlVol);
+        void init(SubHarmonic* parent);
 
         void process();
 
     };
 
-private:
-    void subClock();
-
-public:
     bool m_state =  false;
-
-    SubOsc m_sub1;
-    SubOsc m_sub2;
 
     size_t m_count = 0;
 
