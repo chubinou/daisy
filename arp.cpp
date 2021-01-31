@@ -59,7 +59,7 @@ void Arp::InitChords() {
 void Arp::ProcessOutput()
 {
     int32_t chordStep = chordList[chord][step % 3] + (12 * (step / 3));
-    int32_t outNote = (chordStep * 4095) / 60;
+    int32_t outNote = (chordStep * 0xFFF) / (5 * 12.);
     dsy_dac_write(DSY_DAC_CHN1, outNote < 4095 ? outNote : 4095);
 }
 
