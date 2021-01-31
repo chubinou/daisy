@@ -6,10 +6,10 @@
 
 void Euclidian::init()
 {
-    stepsParam.Init(patch.controls[DaisyPatch::CTRL_1], 0, 32, Parameter::LINEAR);
+    stepsParam.Init(patch.controls[DaisyPatch::CTRL_1], 1, MAX_STEP+1, Parameter::LINEAR);
     fillParam.Init(patch.controls[DaisyPatch::CTRL_2], 0, 1, Parameter::LINEAR);
     rotParam.Init(patch.controls[DaisyPatch::CTRL_3], 0, 1, Parameter::LINEAR);
-    strPattern[16] = '\0';
+    strPattern[MAX_STEP] = '\0';
 }
 
 void Euclidian::AudioCallback(float**, float**, size_t)
@@ -35,9 +35,9 @@ void Euclidian::refill_pattern()
     int i = 0;
     for( ; i < stepsCount; i++)
     {
-        strPattern[i] = pattern[i] ? 'X' : '.';
+        strPattern[i] = pattern[i] ? 'x' : '.';
     }
-    for( ; i < 16; i++)
+    for( ; i < MAX_STEP; i++)
     {
         strPattern[i] = ' ';
     }
@@ -50,17 +50,29 @@ void Euclidian::processOled() {
     printSimpleParam(1, "steps", stepsCount);
     printSimpleParam(2, "fill", (int)(stepsCount * fill));
     printSimpleParam(3, "rot", (int)(stepsCount * rot));
-    patch.display.SetCursor(0, 40);
-    patch.display.WriteString(strPattern, Font_7x10, true);
-    patch.display.SetCursor(7*step, 50);
-    patch.display.WriteString("|", Font_7x10, true);
+    int drawstep = 0;
+    for (int line = 0; line < MAX_STEP/16; line++) {
+        for (int i =0; i < 16; i++) {
+            patch.display.SetCursor(7*i, 40 + line * 10);
+            if (drawstep == step) {
+                if (strPattern[drawstep] == 'x')
+                    patch.display.WriteChar('X', Font_7x10, true);
+                if (strPattern[drawstep] == '.')
+                    patch.display.WriteChar('_', Font_7x10, true);
+            } else {
+                patch.display.WriteChar(strPattern[drawstep], Font_7x10, true);
+            }
+            drawstep++;
+        }
+    }
+
 
     patch.display.Update();
 }
 
 void Euclidian::processInput()
 {
-    float new_steps_count = stepsParam.Process();
+    int new_steps_count = floorf(stepsParam.Process());
     float new_fill = fillParam.Process();
     float new_rot = rotParam.Process();
 

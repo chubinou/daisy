@@ -22,6 +22,8 @@ public:
     void process() override;
 
 private:
+    static const int MAX_STEP = 32;
+
     Parameter stepsParam;
     uint16_t stepsCount = -1;
 
@@ -31,7 +33,7 @@ private:
     Parameter rotParam;
     float rot = -1;
 
-    bool pattern[32];
-    char strPattern[17];
+    bool pattern[MAX_STEP];
+    char strPattern[MAX_STEP + 1];
     uint16_t step;
 };
