@@ -22,6 +22,7 @@ static_assert ( sizeof (Envelope) == 8 + 1024*sizeof (float),"bad enveloppe size
 
 class TableEnv;
 class ShowTable;
+struct EnvelopeState;
 
 enum  PlayMode: int {
     PM_FORWARD = 0,
@@ -32,27 +33,69 @@ enum  PlayMode: int {
     PM_MAX
 };
 
+class ShowTable : public MenuEntry,  public Menu {
+public:
+    enum ShowTableState : int {
+        TS_BACK = 0,
+        TS_SHAPE,
+        TS_LOOP,
+        TS_TSCALE,
+        TS_VSCALE,
+        TS_MAX
+    };
+
+    ShowTable(const char* name, EnvelopeState* envstate);
+
+    bool process() override;
+
+    void drawSelection(int xpos, int width);
+
+    void print(int line, bool on) override;
+
+    void onClick() override;
+
+    void setEnvState(EnvelopeState* envstate);
+private:
+    bool m_stateEdit = false;
+    ShowTableState m_state = TS_BACK;
+    const char* m_name = nullptr;
+    EnvelopeState* m_envstate = nullptr;
+};
+
+
 
 struct EnvelopeState {
-    void init(TableEnv* parent,
-              SetMenuEntry* tableVar, SetMenuEntry* loopVar,
-              RangeParamEntry* timeEntry,
-              RangeParamEntry* tscale, RangeParamEntry* vscale,
-              ShowTable* showTableEntry);
+    EnvelopeState();
+
+    void init(TableEnv* parent);
 
     void processTrigger(GateIn* );
     void update();
 
     void reset();
 
-    RangeParamEntry* m_durationParam = nullptr;
+
+    SetMenuEntry m_tableParam;
+
+    RangeParamEntry m_timeParam;
     float m_duration = 0.f;
 
-    RangeParamEntry* m_vscale = nullptr;
+    SetMenuEntry m_loopParam;
+    PlayMode m_playMode = PM_FORWARD;
+
+    BoolMenuEntry m_invertParam;
+    bool m_invert = false;
+
+    RangeParamEntry m_tscaleParam;
+    float m_timeShape = 1.f;
+
+    RangeParamEntry m_vscaleParam;
     float m_valShape = 1.f;
 
-    RangeParamEntry* m_tscale = nullptr;
-    float m_timeShape = 1.f;
+    RangeParamEntry m_levelParam;
+    float m_level = 5.f;
+
+    ShowTable m_showTableParam;
 
     Envelope* m_env = nullptr;
     float m_phase = 0.f;
@@ -60,11 +103,6 @@ struct EnvelopeState {
     float m_val = 0;
     bool m_running = false;
     bool m_fwd = true;
-
-    SetMenuEntry* m_loopVar = nullptr;
-    PlayMode m_playMode = PM_FORWARD;
-
-    SetMenuEntry* m_tableVar = nullptr;
 
     TableEnv* m_parent = nullptr;
 };
@@ -89,9 +127,6 @@ public:
 
 public:
     bool loadBank(const char* bankName);
-
-    EnvelopeState m_envA;
-    EnvelopeState m_envB;
 
     size_t m_tableCount = 0;
     Envelope* m_tables = nullptr;
