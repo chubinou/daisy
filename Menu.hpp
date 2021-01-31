@@ -52,6 +52,8 @@ public:
     KVMenuEntry(const char* name);
 
     void print(int line, bool on) override;
+
+    const std::string label() const;
     virtual std::string repr() const = 0;
 
 private:
@@ -114,7 +116,6 @@ public:
     std::string repr() const override;
 
     int32_t value() const;
-    const char* label() const;
 
 private:
     const char* m_name = nullptr;
@@ -142,19 +143,15 @@ private:
 
 class RangeParamEntry : public KVEditMenuEntry {
 public:
-    enum Scale {
-        LINEAR,
-        LOGARITHMIC,
-        EXPONENTIAL,
-        CUBE
-    };
-
-    RangeParamEntry(const char* name, float min, float max, int initial, int steps, Scale scale);
+    RangeParamEntry(const char* name, float min, float max, int initial, int steps, Parameter::Curve scale);
 
     std::string repr() const override;
     void increment(int val) override;
 
     inline float value() const { return m_value; }
+
+    void bind(int b);
+    void processParam();
 
 private:
     float m_min;
@@ -165,8 +162,44 @@ private:
     int m_intValue;
     float m_value;
     int m_steps = 0;
-    Scale m_scale;
+    Parameter::Curve m_scale;
+
+    int m_bind = -1;
+    Parameter m_param;
 };
 
+
+class BindParamEntry : public KVEditMenuEntry {
+public:
+    BindParamEntry(const char* name, int hwCtrl, RangeParamEntry** entries, BindParamEntry** bindedEntries, size_t count);
+
+    std::string repr() const override;
+
+    void increment(int val) override;
+
+private:
+    int m_hwCtrl;
+
+    RangeParamEntry** m_entries;
+    BindParamEntry** m_bindedEntries;
+    size_t m_count;
+
+    int m_index = -1;
+};
+
+
+class BindAllParamEntry {
+public:
+    BindAllParamEntry(RangeParamEntry** entries, size_t count);
+    ~BindAllParamEntry();
+
+private:
+    BindParamEntry** m_bindedEntries = nullptr;
+public:
+    BindParamEntry p1;
+    BindParamEntry p2;
+    BindParamEntry p3;
+    BindParamEntry p4;
+};
 
 #endif // MENU_HPP

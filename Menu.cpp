@@ -1,4 +1,5 @@
 #include "Menu.hpp"
+#include "plugin.hpp"
 
 void MenuEntry::setParentMenu(SimpleMenu *parent) {
     m_parentMenu = parent;
@@ -74,6 +75,11 @@ void KVMenuEntry::print(int line, bool on)
     patch.display.WriteString((char*)m_name, Font_7x10, on);
     patch.display.SetCursor(m_paramPos * 7, line * 10);
     patch.display.WriteString((char*)repr().c_str(), Font_7x10, on);
+}
+
+const std::string KVMenuEntry::label() const
+{
+    return m_name;
 }
 
 //////////////////////////////////// KVEditMenuEntry
@@ -168,19 +174,15 @@ void SetMenuEntry::increment(int val)
 
 std::string SetMenuEntry::repr() const
 {
-    return label();
+    if (!m_labels || m_maxValue == 0)
+        return "N/A";
+    return m_labels[m_value];
 }
 
 int32_t SetMenuEntry::value() const {
     if (m_maxValue == 0)
         return -1;
     return m_value;
-}
-
-const char* SetMenuEntry::label() const {
-    if (!m_labels || m_maxValue == 0)
-        return "N/A";
-    return m_labels[m_value];
 }
 
 ShowParamEntry::ShowParamEntry(const char *name)
@@ -209,7 +211,7 @@ void ShowParamEntry::setParam(Parameter *param)
 
 ////////////////////////////////// RangeParamEntry
 
-RangeParamEntry::RangeParamEntry(const char *name, float min, float max, int initial, int steps, Scale scale)
+RangeParamEntry::RangeParamEntry(const char *name, float min, float max, int initial, int steps, Parameter::Curve scale)
     : KVEditMenuEntry(name)
     , m_min(min)
     , m_max(max)
@@ -229,6 +231,9 @@ std::string RangeParamEntry::repr() const
 
 void RangeParamEntry::increment(int inc)
 {
+    if (m_bind != -1)
+        return;
+
     m_intValue += inc;
     if (m_intValue < 0)
         m_intValue = 0;
@@ -238,18 +243,106 @@ void RangeParamEntry::increment(int inc)
     float val = (float)m_intValue / (float)m_steps;
     switch(m_scale)
     {
-        case LINEAR:
+        case Parameter::LINEAR:
             m_value = (val * (m_max - m_min)) + m_min;
         break;
-        case EXPONENTIAL:
+        case Parameter::EXPONENTIAL:
             m_value = ((val * val) * (m_max -m_min)) + m_min;
             break;
-        case LOGARITHMIC:
+        case Parameter::LOGARITHMIC:
             m_value = expf((val * (m_lmax - m_lmax)) + m_lmin);
             break;
-        case CUBE:
+        case Parameter::CUBE:
             m_value = ((val * (val * val)) * (m_max - m_min)) + m_min;
             break;
         default: break;
     }
+}
+
+void RangeParamEntry::bind(int b)
+{
+    m_bind = b;
+    if (b != -1)
+        m_param.Init(patch.controls[b], m_min, m_max, m_scale);
+    else
+        increment(0);
+}
+
+void RangeParamEntry::processParam()
+{
+    if (m_bind == -1)
+        return;
+
+    m_value = m_param.Process() * 0.05 + m_value * 0.95;
+}
+
+
+BindParamEntry::BindParamEntry(const char* name, int hwCtrl, RangeParamEntry** entries, BindParamEntry** bindedEntries, size_t count)
+    : KVEditMenuEntry(name)
+    , m_hwCtrl(hwCtrl)
+    , m_entries(entries)
+    , m_bindedEntries(bindedEntries)
+    , m_count(count)
+{
+}
+
+std::string BindParamEntry::repr() const
+{
+    if (m_index == -1) {
+       return "NONE";
+    } else {
+        return m_entries[m_index]->label();
+    }
+}
+
+void BindParamEntry::increment(int inc)
+{
+    if (inc == 0)
+        return;
+
+    int m_oldIndex = m_index;
+    do {
+        m_index += inc;
+
+        if (m_index <= -1) {
+            m_index = -1;
+            break;
+        }
+
+        if (m_index >= (int)m_count) {
+            m_index = m_oldIndex;
+            break;
+        }
+    } while (m_index != -1 && m_bindedEntries[m_index] != nullptr);
+
+
+    if (m_oldIndex == m_index)
+        return;
+
+    if (m_oldIndex != -1) {
+        m_entries[m_oldIndex]->bind(-1);
+        m_bindedEntries[m_oldIndex] = nullptr;
+    }
+
+    if (m_index != -1) {
+        m_entries[m_index]->bind(m_hwCtrl);
+        m_bindedEntries[m_index] = this;
+    }
+}
+
+BindAllParamEntry::BindAllParamEntry(RangeParamEntry** entries, size_t count)
+    : m_bindedEntries(new class BindParamEntry*[count] )
+    , p1("P1", DaisyPatch::CTRL_1, entries, m_bindedEntries, count)
+    , p2("P2", DaisyPatch::CTRL_2, entries, m_bindedEntries, count)
+    , p3("P3", DaisyPatch::CTRL_3, entries, m_bindedEntries, count)
+    , p4("P4", DaisyPatch::CTRL_4, entries, m_bindedEntries, count)
+{
+    for (size_t i =0; i < count; i++) {
+        m_bindedEntries = nullptr;
+    }
+}
+
+BindAllParamEntry::~BindAllParamEntry()
+{
+    delete[] m_bindedEntries;
 }
