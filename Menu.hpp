@@ -157,6 +157,21 @@ private:
     Parameter* m_param = nullptr;
 };
 
+
+class ShowROStringEntry : public KVMenuEntry {
+public:
+    ShowROStringEntry(const char* name);
+
+    std::string repr() const override;
+
+    void onClick() override;
+
+    void setValue(const std::string& value);
+
+private:
+    std::string m_value;
+};
+
 class RangeParamEntry : public KVEditMenuEntry {
 public:
     RangeParamEntry(const char* name, float min, float max, int initial, int steps, Parameter::Curve scale);

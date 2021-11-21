@@ -13,13 +13,14 @@ C_SOURCES = \
 # Sources
 CPP_SOURCES = \
     main.cpp \
+    Menu.cpp \
     arp.cpp \
+    cvrec.cpp \
     euclid.cpp \
-    xfade.cpp \
-    rand.cpp \
     tableenv.cpp \
     subharmonic.cpp \
-    Menu.cpp \
+    rand.cpp \
+    xfade.cpp \
     plugin.cpp
 
 

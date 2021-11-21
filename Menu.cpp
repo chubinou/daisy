@@ -233,6 +233,25 @@ void ShowParamEntry::setParam(Parameter *param)
     m_param = param;
 }
 
+///////////////////////////////// ShowROStringEntry
+
+ShowROStringEntry::ShowROStringEntry(const char* name)
+    : KVMenuEntry(name)
+{
+
+}
+
+std::string ShowROStringEntry::repr() const
+{
+    return m_value;
+}
+
+void ShowROStringEntry::onClick() {}
+
+void ShowROStringEntry::setValue(const std::string& value)
+{
+    m_value = value;
+}
 ////////////////////////////////// RangeParamEntry
 
 RangeParamEntry::RangeParamEntry(const char *name, float min, float max, int initial, int steps, Parameter::Curve scale)
