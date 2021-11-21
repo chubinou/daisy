@@ -10,7 +10,7 @@ void XFade::init()
     position34Param.Init(patch.controls[DaisyPatch::CTRL_2], 0, 1, Parameter::LINEAR);
 }
 
-void XFade::AudioCallback(float** in, float** out, size_t size)
+void XFade::AudioCallback(const float * const *in, float** out, unsigned int size)
 {
     for (size_t i = 0; i < size; i++)
     {

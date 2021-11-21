@@ -40,7 +40,7 @@ void SubHarmonic::init()
     subOscB.init(this);
 }
 
-void SubHarmonic::AudioCallback(float** in, float** out, size_t size)
+void SubHarmonic::AudioCallback(const float * const *in, float** out, unsigned int size)
 {
 
     for (size_t i = 0; i < size; i++)

@@ -12,7 +12,7 @@ void Euclidian::init()
     strPattern[MAX_STEP] = '\0';
 }
 
-void Euclidian::AudioCallback(float**, float**, size_t)
+void Euclidian::AudioCallback(const float* const*, float**, unsigned int)
 {}
 
 void Euclidian::refill_pattern()

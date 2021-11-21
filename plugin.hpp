@@ -32,7 +32,7 @@ public:
     virtual bool load() { return true; }
     virtual void unload() { }
 
-    virtual void AudioCallback(float**, float**, size_t) = 0;
+    virtual void AudioCallback(const float* const*, float**, unsigned int) = 0;
     virtual void process() = 0;
     virtual const char* name() const = 0;
 

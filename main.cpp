@@ -46,7 +46,7 @@ public:
             pluginList[i]->init();
     }
 
-    void AudioCallback(float**, float**, size_t)  override {
+    void AudioCallback(const float* const*, float**, size_t)  override {
     }
 
     void process()  override {
@@ -79,7 +79,7 @@ private:
 
 MetaPlugin meta;
 
-void AudioCallback(float** input, float** output, size_t size)
+void AudioCallback(const float* const* input, float** output, unsigned int size)
 {
     currentPlugin->AudioCallback(input, output, size);
 }
@@ -96,7 +96,9 @@ int main(void)
 {
 
     patch.Init(); // Initialize hardware (daisy seed, and patch)
-    sdcard.Init();
+    SdmmcHandler::Config sd_cfg;
+    sd_cfg.Defaults();
+    sdcard.Init(sd_cfg);
     dsy_fatfs_init();
     f_mount(&SDFatFS, SDPath, 1);
 

@@ -14,7 +14,7 @@ public:
 
     void init() override;
 
-    void AudioCallback(float**, float**, size_t)  override;
+    void AudioCallback(const float* const*, float**, unsigned int)  override;
 
     void processOled();
     void processInput();

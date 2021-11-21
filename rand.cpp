@@ -12,7 +12,7 @@ void Rand::init()
     filter.Init(patch.AudioSampleRate());
 }
 
-void Rand::AudioCallback(float**, float** out, size_t size)
+void Rand::AudioCallback(const float * const *, float** out, unsigned int size)
 {
 
     for (size_t i = 0; i < size; i++)
@@ -68,8 +68,8 @@ void Rand::processOutput()
 
     if (patch.gate_input[0].Trig()) {
         dacOut = (uint16_t)((4095.f * (float)rand()) / (float)RAND_MAX);
-        dsy_dac_write(DSY_DAC_CHN1, (uint16_t)((4095.f * (float)rand()) / (float)RAND_MAX));
-        dsy_dac_write(DSY_DAC_CHN2, (uint16_t)((4095.f * (float)rand()) / (float)RAND_MAX));
+        patch.seed.dac.WriteValue(DacHandle::Channel::ONE, (uint16_t)((4095.f * (float)rand()) / (float)RAND_MAX));
+        patch.seed.dac.WriteValue(DacHandle::Channel::TWO, (uint16_t)((4095.f * (float)rand()) / (float)RAND_MAX));
     }
 }
 

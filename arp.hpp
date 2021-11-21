@@ -17,7 +17,7 @@ public:
 
     void init() override;
 
-    void AudioCallback(float**, float**, size_t)  override;
+    void AudioCallback(const float* const*, float**, size_t)  override;
 
     void process()  override;
 private:
