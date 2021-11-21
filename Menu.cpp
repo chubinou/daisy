@@ -1,8 +1,20 @@
 #include "Menu.hpp"
 #include "plugin.hpp"
 
-void MenuEntry::setParentMenu(SimpleMenu *parent) {
+void MenuEntry::setParentMenu(ParentMenu *parent)
+{
     m_parentMenu = parent;
+}
+
+
+//////////////////////////////////// ParentMenu
+
+void ParentMenu::leaveSubMenu() {
+    m_subMenu = nullptr;
+}
+
+void ParentMenu::enterSubMenu(Menu *menu) {
+    m_subMenu = menu;
 }
 
 //////////////////////////////////// SimpleMenu
@@ -15,7 +27,9 @@ SimpleMenu::SimpleMenu(MenuEntry **entries, int32_t count)
         m_entryList[i]->setParentMenu(this);
 }
 
-bool SimpleMenu::process() {
+
+bool SimpleMenu::process()
+{
     if (m_subMenu != nullptr) {
         bool ret = m_subMenu->process();
         if (!ret)
@@ -45,20 +59,13 @@ bool SimpleMenu::process() {
     int line = 0;
     for (int32_t i = m_showIdx; i < std::min(m_showIdx + 6, m_entryCount); i++) {
         if (i == m_idx)
-            patch.display.DrawRect(0, line*10, SSD1309_WIDTH - 1, line*10 + 9, true);
+            patch.display.DrawRect(0, line*10, patch.display.Width() - 1, line*10 + 9, true);
         m_entryList[i]->print( line, i != m_idx );
         line++;
     }
     return false;
 }
 
-void SimpleMenu::leaveSubMenu() {
-    m_subMenu = nullptr;
-}
-
-void SimpleMenu::enterSubMenu(Menu *menu) {
-    m_subMenu = menu;
-}
 
 //////////////////////////////////// KVMenuEntry
 

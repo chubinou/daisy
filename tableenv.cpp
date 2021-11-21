@@ -1,10 +1,14 @@
 #include "tableenv.h"
 #include "fatfs.h"
-#include <machine/endian.h>
 
 
 static EnvelopeState envA;
 static EnvelopeState envB;
+
+static EnvelopeState* allEnvelopes[] {
+    &envA,
+    &envB
+};
 
 static const char* playModeLabel[] = {
     "FWD",
@@ -14,121 +18,82 @@ static const char* playModeLabel[] = {
     "PONG"
 };
 
-
-static LabelEntry       labelA("--- Env A ---");
-static LabelEntry       labelB("--- Env B ---");
-static LabelEntry       labelBind("--- Bind ---");
-
-
-static RangeParamEntry* bindableEntries[] = {
-    &envA.m_timeParam,
-    &envA.m_tscaleParam,
-    &envA.m_vscaleParam,
-    &envB.m_timeParam,
-    &envB.m_tscaleParam,
-    &envB.m_vscaleParam,
+const char* envNames[] = {
+    "Env A",
+    "Env B",
 };
 
-static BindAllParamEntry paramBind(bindableEntries, ARRAY_SIZE(bindableEntries));
-
-static MenuEntry* mainMenuEntries[] = {
-    &labelA,
-    &envA.m_tableParam,
-    &envA.m_timeParam,
-    &envA.m_loopParam,
-    &envA.m_invertParam,
-    &envA.m_tscaleParam,
-    &envA.m_vscaleParam,
-    &envA.m_showTableParam,
-
-    &labelB,
-    &envB.m_tableParam,
-    &envB.m_timeParam,
-    &envB.m_loopParam,
-    &envB.m_invertParam,
-    &envB.m_tscaleParam,
-    &envB.m_vscaleParam,
-    &envB.m_showTableParam,
-
-    &labelBind,
-    &paramBind.p1,
-    &paramBind.p2,
-    &paramBind.p3,
-    &paramBind.p4,
-};
-static SimpleMenu mainMenu(mainMenuEntries, ARRAY_SIZE(mainMenuEntries));
 
 
+ShowTable::ShowTable()
+    : m_envelopeSelect("Env", envNames, 2)
+{
+    m_envelopeSelect.setParentMenu(this);
+    bindTable();
+}
 
-ShowTable::ShowTable(const char* name, EnvelopeState* envstate)
-    : m_name(name)
-    , m_envstate(envstate)
-{}
+void ShowTable::init(EnvelopeState** envstate, size_t count)
+{
+    m_allEnv = envstate;
+    m_allEnvCount = count;
 
-bool ShowTable::process() {
+}
 
-    int inc = patch.encoder.Increment();
-    if (inc != 0) {
-        bool udpateSelection = true;
-        switch (m_state) {
-        case TS_SHAPE:
-            if (m_stateEdit) {
-                m_envstate->m_tableParam.increment(inc);
-                udpateSelection = false;
-            }
-            break;
-        case TS_TSCALE:
-            if (m_stateEdit) {
-                m_envstate->m_tscaleParam.increment(inc);
-                udpateSelection = false;
-            }
-            break;
-        case TS_LOOP:
-            if (m_stateEdit) {
-                m_envstate->m_loopParam.increment(inc);
-                udpateSelection = false;
-            }
-            break;
-        case TS_VSCALE:
-            if (m_stateEdit) {
-                m_envstate->m_vscaleParam.increment(inc);
-                udpateSelection = false;
-            }
-            break;
-        default:
-            break;
-        }
-        if (udpateSelection)
-            m_state = (ShowTableState)((m_state + inc + TS_MAX) % TS_MAX);
+void ShowTable::bindTable()
+{
+    unsigned envId = m_envelopeSelect.value();
+    if (m_envstate != allEnvelopes[envId])
+    {
+        m_envstate = allEnvelopes[envId];
+        m_params = m_envstate->bind(m_paramsCount);
+        for (unsigned i = 0; i < m_paramsCount; i++)
+            m_params[i]->setParentMenu(this);
     }
+}
 
-    if (patch.encoder.RisingEdge()) {
-        switch (m_state) {
-        case TS_BACK:
-            m_parentMenu->leaveSubMenu();
-            return true;
-            break;
-        case TS_SHAPE:
-        case TS_TSCALE:
-        case TS_VSCALE:
-        case TS_LOOP:
-            m_stateEdit = !m_stateEdit;
-            return true;
-            break;
-        default:
-            break;
-        }
-    }
 
+MenuEntry* ShowTable::getCurrentMenu()
+{
+    size_t idx = m_state;
+    if (idx == INTERNAL_PARAM_ENV_SELECT)
+        return &m_envelopeSelect;
+    return m_params[idx - INTERNAL_PARAM_COUNT];
+}
+
+bool ShowTable::process()
+{
     patch.display.Fill(false);
+
+    bindTable();
+
     if (!m_envstate || !m_envstate->m_env) {
         patch.display.SetCursor(0, 0);
         patch.display.WriteString("no table loaded", Font_7x10, false);
         return false;
     }
-    for (int i =0; i < SSD1309_WIDTH; i++) {
 
-        float shapedPhase = fclamp(powf(float(i) / SSD1309_WIDTH, m_envstate->m_timeShape), 0.f, 1.f);
+    MenuEntry* menu = getCurrentMenu();
+
+    if (m_subMenu != nullptr) {
+        bool ret = m_subMenu->process();
+        if (!ret)
+            return false;
+    } else {
+        if (patch.encoder.RisingEdge()) {
+            menu->onClick();
+        }
+
+        int32_t inc = patch.encoder.Increment();
+        m_state = (m_state + inc + m_paramsCount + INTERNAL_PARAM_COUNT) % (m_paramsCount + INTERNAL_PARAM_COUNT);
+    }
+
+
+    menu->print( 0, true );
+
+
+    for (int i =0; i < patch.display.Width(); i++) {
+
+        float shapedPhase = fclamp(powf(float(i) / patch.display.Width(), m_envstate->m_timeShape), 0.f, 1.f);
 
         int idx = (shapedPhase * TABLE_ENV_TABLE_SIZE);
 
@@ -140,41 +105,11 @@ bool ShowTable::process() {
         if (!m_envstate->m_invert)
             val = 1.f - val;
 
-        patch.display.DrawPixel(i, 9 + val * (SSD1309_HEIGHT - 10), true);
+        patch.display.DrawPixel(i, 9 + val * (patch.display.Height() - 10), true);
     }
 
-    patch.display.DrawLine(SSD1309_WIDTH * m_envstate->m_phase, 10,
-                           SSD1309_WIDTH * m_envstate->m_phase, SSD1309_HEIGHT - 1, true);
-
-    int xpos = 1;
-    patch.display.SetCursor(xpos,1);
-    patch.display.WriteChar('<', Font_6x8, true);
-    if (m_state == TS_BACK) drawSelection(xpos, 1);
-    xpos += 6*1+3;
-
-    patch.display.SetCursor(xpos ,1);
-    patch.display.WriteString(m_envstate->m_env->name, Font_6x8, !(m_state == TS_SHAPE && m_stateEdit));
-    if (m_state == TS_SHAPE) drawSelection(xpos, 7);
-    xpos += 6*7+3;
-
-    patch.display.SetCursor(xpos,1);
-    patch.display.WriteString(m_envstate->m_loopParam.repr().c_str(), Font_6x8, true);
-    if (m_state == TS_LOOP) drawSelection(xpos, 4);
-    xpos += 6*4+3;
-
-    patch.display.SetCursor(xpos,1);
-    patch.display.WriteChar('T', Font_6x8, true);
-    patch.display.SetCursor(xpos+6,1);
-    patch.display.WriteString(m_envstate->m_tscaleParam.repr().c_str(), Font_6x8, !(m_state == TS_TSCALE && m_stateEdit));
-    if (m_state == TS_TSCALE) drawSelection(xpos, 5);
-    xpos += 6*5+3;
-
-    patch.display.SetCursor(xpos,1);
-    patch.display.WriteChar('V', Font_6x8, true);
-    patch.display.SetCursor(xpos+6,1);
-    patch.display.WriteString(m_envstate->m_vscaleParam.repr().c_str(), Font_6x8, !(m_state == TS_VSCALE && m_stateEdit));
-    if (m_state == TS_VSCALE) drawSelection(xpos, 5);
-    xpos += 6*5+3;
+    patch.display.DrawLine(patch.display.Width() * m_envstate->m_phase, 10,
+                           patch.display.Width() * m_envstate->m_phase, patch.display.Height() - 1, true);
 
     return false;
 }
@@ -184,15 +119,6 @@ void ShowTable::drawSelection(int xpos, int width) {
     patch.display.DrawLine(xpos-1,         0, xpos+6*width,   0, true);
     patch.display.DrawLine(xpos-1,         0, xpos,           9, true);
     patch.display.DrawLine(xpos-1+6*width, 0, xpos-1+6*width, 9, true);
-}
-
-void ShowTable::print(int line, bool on) {
-    patch.display.SetCursor(0, line * 10);
-    patch.display.WriteString((char*)m_name, Font_7x10, on);
-}
-
-void ShowTable::onClick(){
-    m_parentMenu->enterSubMenu(this);
 }
 
 void ShowTable::setEnvState(EnvelopeState* envstate) {
@@ -232,8 +158,11 @@ void TableEnv::unload()
     m_tableCount = 0;
 }
 
-void TableEnv::AudioCallback(float ** input, float ** output, size_t size)
+void TableEnv::AudioCallback(const float* const* input, float** output, unsigned int size)
 {
+
+    envA.updatePhase();
+    envB.updatePhase();
     for (size_t i = 0; i < size; i++) {
         output[0][i] = envA.m_val * input[0][i];
         output[1][i] = envA.m_val * input[1][i];
@@ -269,12 +198,30 @@ void EnvelopeState::update()
     if (!m_running || !m_env)
         return;
 
-    m_delta = m_duration / patch.AudioCallbackRate();
+    m_delta = 1  / (m_duration * patch.AudioCallbackRate());
 
+    float shapedPhase = fclamp(powf(m_phase, m_timeShape), 0.f, 1.f);
+
+    int16_t loValIdx = floorf(shapedPhase * TABLE_ENV_TABLE_SIZE);
+    float phaseFrac = shapedPhase * TABLE_ENV_TABLE_SIZE - loValIdx;
+
+    m_val = fclamp(pow(m_env->samples[loValIdx] * (1 - phaseFrac) +
+                       m_env->samples[(loValIdx + 1)] *  phaseFrac,
+                       m_valShape),
+                   0.f, 1.f);
+
+    if (m_invert) {
+        m_val = 1.f - m_val;
+    }
+}
+
+void EnvelopeState::updatePhase()
+{
     if (m_fwd)
         m_phase += m_delta;
     else
         m_phase -= m_delta;
+
     if (m_phase > 1.f) {
         if (m_playMode ==  PM_FORWARD) {
             m_val = 0;
@@ -300,34 +247,28 @@ void EnvelopeState::update()
             m_fwd = true;
         }
     }
-
-    float shapedPhase = fclamp(powf(m_phase, m_timeShape), 0.f, 1.f);
-
-    int16_t loValIdx = floorf(shapedPhase * TABLE_ENV_TABLE_SIZE);
-    float phaseFrac = shapedPhase * TABLE_ENV_TABLE_SIZE - loValIdx;
-
-    m_val = fclamp(pow(m_env->samples[loValIdx] * (1 - phaseFrac) +
-                       m_env->samples[(loValIdx + 1)] *  phaseFrac,
-                       m_valShape),
-                   0.f, 1.f);
-
-    if (m_invert) {
-        m_val = 1.f - m_val;
-    }
-
 }
 
 
 EnvelopeState::EnvelopeState()
     : m_tableParam("Table")
-    , m_timeParam("Duration", 0.1f, 30.f, 128, 256, Parameter::EXPONENTIAL)
+    , m_timeParam("Duration", 0.1f, 10.f, 128, 256, Parameter::EXPONENTIAL)
     , m_loopParam("Mode", playModeLabel, PM_MAX)
     , m_invertParam("Invert")
     , m_tscaleParam("TScale", 0.01f, 10.f, 64, 128, Parameter::EXPONENTIAL)
     , m_vscaleParam("VScale", 0.01f, 10.f, 64, 128, Parameter::EXPONENTIAL)
     , m_levelParam("Level",   0.1f,  5.f, 39, 39,  Parameter::LINEAR)
-    , m_showTableParam("view...", this)
-{}
+{
+    int i = 0;
+    m_allParam[i++] = &m_tableParam;
+    m_allParam[i++] = &m_timeParam;
+    m_allParam[i++] = &m_loopParam;
+    m_allParam[i++] = &m_invertParam;
+    m_allParam[i++] = &m_tscaleParam;
+    m_allParam[i++] = &m_vscaleParam;
+    m_allParam[i++] = &m_levelParam;
+    assert(i == ENV_STATE_COUNT_PARAM);
+}
 
 
 void EnvelopeState::init(TableEnv *parent)
@@ -342,6 +283,12 @@ void EnvelopeState::reset()
     m_env = nullptr;
     m_running = false;
     m_delta = 0;
+}
+
+MenuEntry** EnvelopeState::bind(size_t &count)
+{
+    count = ENV_STATE_COUNT_PARAM;
+    return m_allParam;
 }
 
 void EnvelopeState::processTrigger(GateIn * gate)
@@ -369,16 +316,17 @@ void EnvelopeState::processTrigger(GateIn * gate)
 
 void TableEnv::processInput()
 {
-    envA.processTrigger(&patch.gate_input[0]);
-    envB.processTrigger(&patch.gate_input[1]);
-    envA.update();
-    envB.update();
+    for (unsigned i = 0; i < ARRAY_SIZE(allEnvelopes); i++)
+    {
+        allEnvelopes[i]->processTrigger(&patch.gate_input[i]);
+        allEnvelopes[i]->update();
+    }
 }
 
 
 void TableEnv::processOled()
 {
-    mainMenu.process();
+    m_showTable.process();
     patch.display.Update();
 }
 
@@ -447,16 +395,18 @@ bool TableEnv::loadBank(const char* bankName) {
         m_labels[i] = m_tables[i].name;
     }
 
-    envA.m_tableParam.setSet(m_labels, m_tableCount);
-    envB.m_tableParam.setSet(m_labels, m_tableCount);
-    return true;
+    for (unsigned i = 0; i < ARRAY_SIZE(allEnvelopes); i++) {
+        allEnvelopes[i]->m_tableParam.setSet(m_labels, m_tableCount);
+    }
+    m_showTable.init(allEnvelopes, ARRAY_SIZE(allEnvelopes));
 
+    return true;
 }
 
 void TableEnv::processOutput()
 {
-    dsy_dac_write(DSY_DAC_CHN1, (uint16_t)(envA.m_val * 0xFFF));
-    dsy_dac_write(DSY_DAC_CHN2, (uint16_t)(envB.m_val * 0xFFF));
+    patch.seed.dac.WriteValue(DacHandle::Channel::ONE, (uint16_t)(envA.m_val * 0xFFF));
+    patch.seed.dac.WriteValue(DacHandle::Channel::TWO, (uint16_t)(envB.m_val * 0xFFF));
 }
 
 void TableEnv::process() {

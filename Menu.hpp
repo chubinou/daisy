@@ -16,31 +16,35 @@ class Menu {
 public:
     virtual bool process() = 0;
 };
-class SimpleMenu;
+class ParentMenu;
 
 class MenuEntry {
 public:
     virtual void print(int line, bool on) = 0;
     virtual void onClick() = 0;
-    void setParentMenu(SimpleMenu* parent);
+    void setParentMenu(ParentMenu* parent);
 protected:
-    SimpleMenu* m_parentMenu = nullptr;
+    ParentMenu* m_parentMenu = nullptr;
 };
 
-class SimpleMenu : public Menu {
+class ParentMenu : public Menu
+{
+public:
+    virtual void leaveSubMenu();
+    virtual void enterSubMenu(Menu* menu);
+
+protected:
+    Menu* m_subMenu = nullptr;
+};
+
+class SimpleMenu : public ParentMenu {
 public:
     SimpleMenu( MenuEntry** entries, int32_t count);
 
     bool process() override;
 
-    void leaveSubMenu();
-
-    void enterSubMenu(Menu* menu);
-
     int32_t m_idx = 0;
     int32_t m_showIdx = 0;
-
-    Menu* m_subMenu = nullptr;
 
     MenuEntry** m_entryList = nullptr;
     int32_t m_entryCount = 0;

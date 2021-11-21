@@ -35,33 +35,40 @@ enum  PlayMode: int {
     PM_MAX
 };
 
-class ShowTable : public MenuEntry,  public Menu {
+class ShowTable : public ParentMenu {
 public:
-    enum ShowTableState : int {
-        TS_BACK = 0,
-        TS_SHAPE,
-        TS_LOOP,
-        TS_TSCALE,
-        TS_VSCALE,
-        TS_MAX
+    ShowTable();
+
+    enum {
+        INTERNAL_PARAM_ENV_SELECT = 0,
+        INTERNAL_PARAM_COUNT
     };
 
-    ShowTable(const char* name, EnvelopeState* envstate);
+    void init(EnvelopeState **envstate, size_t count);
+    void bindTable();
 
     bool process() override;
 
     void drawSelection(int xpos, int width);
 
-    void print(int line, bool on) override;
-
-    void onClick() override;
-
     void setEnvState(EnvelopeState* envstate);
+    MenuEntry* getCurrentMenu();
 private:
     bool m_stateEdit = false;
-    ShowTableState m_state = TS_BACK;
-    const char* m_name = nullptr;
+    size_t m_currentState = 0;
+
+    EnvelopeState** m_allEnv = nullptr;
+    size_t m_allEnvCount = 0;
+
     EnvelopeState* m_envstate = nullptr;
+
+    SetMenuEntry m_envelopeSelect;
+
+    size_t m_state = 0;
+
+
+    MenuEntry** m_params = nullptr;
+    size_t m_paramsCount = 0;
 };
 
 
@@ -74,8 +81,11 @@ struct EnvelopeState {
     void processTrigger(GateIn* );
     void update();
 
+    void updatePhase();
+
     void reset();
 
+    MenuEntry** bind(size_t& count);
 
     SetMenuEntry m_tableParam;
 
@@ -97,7 +107,8 @@ struct EnvelopeState {
     RangeParamEntry m_levelParam;
     float m_level = 5.f;
 
-    ShowTable m_showTableParam;
+#define  ENV_STATE_COUNT_PARAM 7
+    MenuEntry* m_allParam[ENV_STATE_COUNT_PARAM];
 
     Envelope* m_env = nullptr;
     float m_phase = 0.f;
@@ -109,7 +120,6 @@ struct EnvelopeState {
     TableEnv* m_parent = nullptr;
 };
 
-
 class TableEnv : public Plugin
 {
 public:
@@ -119,7 +129,7 @@ public:
     bool load() override;
     void unload() override;
 
-    void AudioCallback(float**, float**, size_t)  override;
+    void AudioCallback(const float* const*, float**, unsigned int)  override;
 
     void processOled();
     void processInput();
@@ -130,9 +140,11 @@ public:
 public:
     bool loadBank(const char* bankName);
 
-    size_t m_tableCount = 0;
     Envelope* m_tables = nullptr;
+    size_t m_tableCount = 0;
     const char** m_labels = nullptr;
+
+    ShowTable m_showTable;
 
     friend struct EnvelopeState;
 };
